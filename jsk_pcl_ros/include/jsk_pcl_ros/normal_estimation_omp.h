@@ -39,6 +39,7 @@
 
 #include <jsk_topic_tools/diagnostic_nodelet.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/MagneticField.h>
 #include <pcl_ros/FeatureConfig.h>
 #include <dynamic_reconfigure/server.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -64,6 +65,7 @@ namespace jsk_pcl_ros
     boost::mutex mutex_;
     ros::Publisher pub_;
     ros::Publisher pub_with_xyz_;
+    ros::Publisher pub_point_with_covariance_;
     ros::Subscriber sub_;
     std::string sensor_frame_;
     boost::shared_ptr <dynamic_reconfigure::Server<Config> > srv_;

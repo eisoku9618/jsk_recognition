@@ -50,6 +50,7 @@ namespace jsk_pcl_ros
     srv_->setCallback (f);
     pub_ = advertise<sensor_msgs::PointCloud2>(*pnh_, "output", 1);
     pub_with_xyz_ = advertise<sensor_msgs::PointCloud2>(*pnh_, "output_with_xyz", 1);
+    pub_point_with_covariance_ = advertise<sensor_msgs::MagneticField>(*pnh_, "output_point_with_covariance", 1);
   }
 
   void NormalEstimationOMP::subscribe()
@@ -97,21 +98,50 @@ namespace jsk_pcl_ros
     pcl::PointCloud<pcl::PointXYZRGBNormal>::Ptr
       normal_xyz(new pcl::PointCloud<pcl::PointXYZRGBNormal>);
     normal_xyz->points.resize(cloud->points.size());
-    for (size_t i = 0; i < normal_xyz->points.size(); i++) {
-      pcl::PointXYZRGBNormal p;
-      p.x = cloud->points[i].x;
-      p.y = cloud->points[i].y;
-      p.z = cloud->points[i].z;
-      p.normal_x = normal_cloud->points[i].normal_x;
-      p.normal_y = normal_cloud->points[i].normal_y;
-      p.normal_z = normal_cloud->points[i].normal_z;
-      normal_xyz->points[i] = p;
+    Eigen::Vector3d ave = Eigen::Vector3d::Zero();
+    {
+      for (size_t i = 0; i < normal_xyz->points.size(); i++) {
+        pcl::PointXYZRGBNormal p;
+        p.x = cloud->points[i].x;
+        p.y = cloud->points[i].y;
+        p.z = cloud->points[i].z;
+        p.normal_x = normal_cloud->points[i].normal_x;
+        p.normal_y = normal_cloud->points[i].normal_y;
+        p.normal_z = normal_cloud->points[i].normal_z;
+        ave(0) += normal_cloud->points[i].normal_x;
+        ave(1) += normal_cloud->points[i].normal_y;
+        ave(2) += normal_cloud->points[i].normal_z;
+        normal_xyz->points[i] = p;
+      }
+      ave = ave / normal_xyz->points.size();
     }
-
+    Eigen::Matrix3d cov = Eigen::Matrix3d::Zero();
+    {
+      for (size_t i = 0; i < normal_xyz->points.size(); i++) {
+        Eigen::Vector3d diff = Eigen::Vector3d(normal_cloud->points[i].normal_x, normal_cloud->points[i].normal_y, normal_cloud->points[i].normal_z) - ave;
+        cov += diff * diff.transpose();
+      }
+      cov = cov / normal_xyz->points.size();
+    }
     sensor_msgs::PointCloud2 ros_normal_xyz_cloud;
     pcl::toROSMsg(*normal_xyz, ros_normal_xyz_cloud);
     ros_normal_xyz_cloud.header = cloud_msg->header;
     pub_with_xyz_.publish(ros_normal_xyz_cloud);
+    sensor_msgs::MagneticField mag;
+    mag.magnetic_field.x = ave(0);
+    mag.magnetic_field.y = ave(1);
+    mag.magnetic_field.z = ave(2);
+    mag.magnetic_field_covariance[0] = cov(0, 0);
+    mag.magnetic_field_covariance[1] = cov(0, 1);
+    mag.magnetic_field_covariance[2] = cov(0, 2);
+    mag.magnetic_field_covariance[3] = cov(1, 0);
+    mag.magnetic_field_covariance[4] = cov(1, 1);
+    mag.magnetic_field_covariance[5] = cov(1, 2);
+    mag.magnetic_field_covariance[6] = cov(2, 0);
+    mag.magnetic_field_covariance[7] = cov(2, 1);
+    mag.magnetic_field_covariance[8] = cov(2, 2);
+    mag.header = cloud_msg->header;
+    pub_point_with_covariance_.publish(mag);
   }
 }
 
